@@ -1,35 +1,101 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
-    "strings"
+	"strings"
 )
+
+type config struct {
+	bind  string
+	sh    string
+	args  []string
+	repos map[string]string
+}
 
 var (
-	bind  string            = ":8001"
-	sh    string            = "sh"
-	args  []string          = []string{"ancestor.sh"}
-	repos map[string]string = make(map[string]string)
+	g *config
 )
 
-func readConfig() {
-	sh = "d:\\software\\cygwin\\bin\\bash"
-	args = []string{"--login", "/cygdrive/d/go/src/github.com/benbearchen/gittool/ancestor/ancestor.sh"}
-	repos["intro"] = "/cygdrive/d/work/git/intro"
+func parseConfig(reader *bufio.Reader) *config {
+	c := new(config)
+	c.bind = ":8001"
+	c.sh = "sh"
+	c.args = make([]string, 0)
+	c.repos = make(map[string]string)
+
+	for {
+		s, err := reader.ReadString('\n')
+		if err != nil {
+			break
+		} else if len(s) == 0 || s[0] == '#' {
+			continue
+		}
+
+		e := strings.Index(s, "=")
+		if e <= 0 {
+			continue
+		}
+
+		k := strings.TrimSpace(s[:e])
+		v := strings.TrimSpace(s[e+1:])
+		if len(v) == 0 {
+			continue
+		}
+
+		switch k {
+		case "bind":
+			c.bind = v
+		case "sh":
+			c.sh = v
+		case "arg":
+			c.args = append(c.args, v)
+		default:
+			repo := "repo."
+			if strings.Index(k, repo) == 0 {
+				c.repos[k[len(repo):]] = v
+			}
+		}
+	}
+
+	return c
+}
+
+func readSampleConfig() *config {
+	conf := `
+bind=:8001
+sh=d:\\software\\cygwin\\bin\\bash
+arg=--login
+arg=/cygdrive/d/go/src/github.com/benbearchen/gittool/ancestor/ancestor.sh
+repo.intro=/cygdrive/d/work/git/intro
+`
+
+	return parseConfig(bufio.NewReader(bytes.NewBuffer([]byte(conf))))
+}
+
+func readConfig() *config {
+	conf, err := os.Open("config.ini")
+	if err != nil {
+		return nil
+	}
+
+	return parseConfig(bufio.NewReader(conf))
 }
 
 func checkAncestor(repo, now, eld string) string {
-	d, ok := repos[repo]
+	d, ok := g.repos[repo]
 	if !ok {
 		return "\ninvalid repo: " + repo
 	}
 
-	arg := args[:]
+	arg := g.args[:]
 	arg = append(arg, d, now, eld)
-	b, err := exec.Command(sh, arg...).Output()
+	b, err := exec.Command(g.sh, arg...).Output()
 	if err != nil {
 		return string(b) + "\n" + err.Error()
 	} else {
@@ -51,16 +117,16 @@ func isAncestor(repo, now, eld string) (bool, error) {
 }
 
 func checkArg(arg string) bool {
-    if len(arg) == 0 {
-        return false
-    }
+	if len(arg) == 0 {
+		return false
+	}
 
-    // Make sure that arg won't be `rm -rf /`...
-    if strings.ContainsAny(arg, "|&\"'` \t\r\n") {
-        return false
-    }
+	// Make sure that arg won't be `rm -rf /`...
+	if strings.ContainsAny(arg, "|&\"'` \t\r\n") {
+		return false
+	}
 
-    return true
+	return true
 }
 
 func ancestorServe(w http.ResponseWriter, req *http.Request) {
@@ -79,8 +145,8 @@ func ancestorServe(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	readConfig()
+	g = readConfig()
 
 	http.HandleFunc("/ancestor", ancestorServe)
-	http.ListenAndServe(bind, nil)
+	http.ListenAndServe(g.bind, nil)
 }
