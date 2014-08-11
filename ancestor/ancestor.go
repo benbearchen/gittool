@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+    "strings"
 )
 
 var (
@@ -49,12 +50,25 @@ func isAncestor(repo, now, eld string) (bool, error) {
 	return false, fmt.Errorf("error: " + result)
 }
 
+func checkArg(arg string) bool {
+    if len(arg) == 0 {
+        return false
+    }
+
+    // Make sure that arg won't be `rm -rf /`...
+    if strings.ContainsAny(arg, "|&\"'` \t\r\n") {
+        return false
+    }
+
+    return true
+}
+
 func ancestorServe(w http.ResponseWriter, req *http.Request) {
 	if req.ParseForm() == nil {
 		repo := req.Form.Get("repo")
 		now := req.Form.Get("now")
 		eld := req.Form.Get("eld")
-		if len(repo) == 0 || len(now) == 0 || len(eld) == 0 {
+		if !checkArg(repo) || !checkArg(now) || !checkArg(eld) {
 			io.WriteString(w, "invalid input")
 		} else {
 			io.WriteString(w, checkAncestor(repo, now, eld))
