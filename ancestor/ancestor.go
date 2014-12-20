@@ -84,6 +84,7 @@ func readConfig() *config {
 		return nil
 	}
 
+    defer conf.Close()
 	return parseConfig(bufio.NewReader(conf))
 }
 
