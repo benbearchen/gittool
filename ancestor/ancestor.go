@@ -4,18 +4,21 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"io"
+	"html/template"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
 type config struct {
-	bind  string
-	sh    string
-	args  []string
-	repos map[string]string
+	bind    string
+	sh      string
+	args    []string
+	repodir string
+	repos   map[string]string
+	alias   map[string]string
 }
 
 var (
@@ -28,6 +31,7 @@ func parseConfig(reader *bufio.Reader) *config {
 	c.sh = "sh"
 	c.args = make([]string, 0)
 	c.repos = make(map[string]string)
+	c.alias = make(map[string]string)
 
 	for {
 		s, err := reader.ReadString('\n')
@@ -55,6 +59,15 @@ func parseConfig(reader *bufio.Reader) *config {
 			c.sh = v
 		case "arg":
 			c.args = append(c.args, v)
+		case "repo":
+			c.repodir = v
+		case "repo.alias":
+			for _, kvp := range strings.Split(v, ";") {
+				kv := strings.Split(kvp, ":")
+				if len(kv) == 2 && len(kv[0]) > 0 && len(kv[1]) > 0 {
+					c.alias[kv[0]] = kv[1]
+				}
+			}
 		default:
 			repo := "repo."
 			if strings.Index(k, repo) == 0 {
@@ -84,14 +97,38 @@ func readConfig() *config {
 		return nil
 	}
 
-    defer conf.Close()
+	defer conf.Close()
 	return parseConfig(bufio.NewReader(conf))
 }
 
-func checkAncestor(repo, now, eld string) string {
+func checkRepo(repo string) (string, error) {
 	d, ok := g.repos[repo]
-	if !ok {
-		return "\ninvalid repo: " + repo
+	if ok {
+		return d, nil
+	}
+
+	if len(g.repodir) > 0 {
+		p1 := filepath.Join(g.repodir, repo)
+		fmt.Println(g.repodir, p1)
+		fi, err := os.Stat(p1)
+		if err == nil && fi.IsDir() {
+			return p1, nil
+		}
+
+		p1 += ".git"
+		fi, err = os.Stat(p1)
+		if err == nil && fi.IsDir() {
+			return p1, nil
+		}
+	}
+
+	return "", fmt.Errorf("invalid repo: " + repo)
+}
+
+func checkAncestor(repo, now, eld string) string {
+	d, err := checkRepo(repo)
+	if err != nil {
+		return fmt.Sprintf("\n%v", err)
 	}
 
 	arg := g.args[:]
@@ -130,24 +167,91 @@ func checkArg(arg string) bool {
 	return true
 }
 
+type tRepo struct {
+	Repo, Alias string
+}
+
+type tAncestorIndex struct {
+	Repos  []tRepo
+	Result string
+}
+
+func dataAncestorIndex() tAncestorIndex {
+	return dataAncestorResult("")
+}
+
+func dataAncestorResult(result string) tAncestorIndex {
+	repos := make([]tRepo, 0, len(g.alias))
+	for k, v := range g.alias {
+		repos = append(repos, tRepo{k, v})
+	}
+
+	info := ""
+	r := strings.Split(result, "\n")
+	if r[0] == "0" {
+		info = "结果：不包含"
+	} else if r[0] == "1" {
+		info = "结果：包含"
+	} else if len(r) > 1 {
+		info = "错误：" + strings.Join(r[1:], "\n")
+	}
+
+	return tAncestorIndex{repos, info}
+}
+
 func ancestorServe(w http.ResponseWriter, req *http.Request) {
 	if req.ParseForm() == nil {
 		repo := req.Form.Get("repo")
+		if len(repo) == 0 {
+			alias := req.Form.Get("alias")
+			if len(alias) > 0 {
+				repo = alias
+			}
+		}
+
+		if len(repo) == 0 {
+			t, err := template.ParseFiles("ancestor.index.tmpl")
+			if err == nil {
+				err = t.Execute(w, dataAncestorIndex())
+				if err == nil {
+					return
+				}
+			}
+
+			fmt.Fprintln(w, `<html><body>参数：?repo=...&amp;now=...&amp;eld=...</body></html>`, err)
+			return
+		}
+
 		now := req.Form.Get("now")
 		eld := req.Form.Get("eld")
 		if !checkArg(repo) || !checkArg(now) || !checkArg(eld) {
-			io.WriteString(w, "invalid input")
+			fmt.Fprintln(w, "invalid input")
 		} else {
-			io.WriteString(w, checkAncestor(repo, now, eld))
+			result := checkAncestor(repo, now, eld)
+			t, err := template.ParseFiles("ancestor.index.tmpl")
+			if err == nil {
+				err = t.Execute(w, dataAncestorResult(result))
+				if err == nil {
+					return
+				}
+			}
+
+			fmt.Fprintln(w, `结果：`+result)
 		}
 	} else {
-		io.WriteString(w, "invalid input")
+		fmt.Fprintln(w, "invalid input")
 	}
+}
+
+func indexServe(w http.ResponseWriter, req *http.Request) {
+	fmt.Fprintln(w, `
+<html><body><a href="./ancestor">查询提交包含关系</a></body></html>`)
 }
 
 func main() {
 	g = readConfig()
 
 	http.HandleFunc("/ancestor", ancestorServe)
+	http.HandleFunc("/", indexServe)
 	http.ListenAndServe(g.bind, nil)
 }

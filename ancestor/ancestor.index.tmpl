@@ -1,0 +1,15 @@
+<html>
+<head>
+</head>
+<body>
+{{if .Result}}{{.Result}}<hr/>{{end}}
+<form method="get">
+<input type="submit" value="查询：打包节点是否包含提交节点"/>
+<br/>git 仓库：<input type="text" name="repo" size="40" placeholder="输入仓库名或右边选择"/>
+（或<select name="alias"><option value="">仓库列表：</option>{{range .Repos}}<option value="{{.Repo}}">{{.Alias}}</option>{{end}}</select>）
+<br/>打包节点：<input type="text" name="now" size="40" placeholder="release"/>
+<br/>提交节点：<input type="text" name="eld" size="40"/>
+<br/>（注：以上“节点”可以是：分支名字、tag、hash）
+</form>
+</body>
+</html>
