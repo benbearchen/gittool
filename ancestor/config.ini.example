@@ -1,0 +1,22 @@
+# bind define the http bind address
+bind=:8001
+
+# `sh' and `arg's define how to run the ancestor script
+sh=d:\software\cygwin\bin\bash
+arg=--login
+arg=/cygdrive/d/go/src/github.com/benbearchen/gittool/ancestor/ancestor.sh
+# the example will run `d:\software\cygwin\bin\bash --login /cygdrive/d/go/src/github.com/benbearchen/gittool/ancestor/ancestor.sh <git-dir> <now> <eld>'
+
+# `repo.<git-name>' define a special git dir and it's full path.
+repo.intro=/cygdrive/d/work/git/intro
+repo.a=/cygdrive/d/anothergit.git
+
+# `repo' define a default directory that contains git dirs.
+# If a <git-name> can't be found as `repo.<git-name>',
+# it will be searched in `repo' dir, as `<repo>\<git-name>[.git]'
+repo=D:\gitrepos
+
+# `repo.alias' define alias names of the git repos.
+# It's format is <git-name>:<alias-name>;<git-name>:<alias-name>;...
+# <git-name> should be defined by `repo.<git-name>' or found in `repo' dir.
+repo.alias=intro:a introduction to git;other:a git under default repo
