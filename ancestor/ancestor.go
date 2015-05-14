@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -171,6 +172,8 @@ type tRepo struct {
 	Repo, Alias string
 }
 
+type tRepoSort []tRepo
+
 type tAncestorIndex struct {
 	Repos  []tRepo
 	Result string
@@ -186,6 +189,8 @@ func dataAncestorResult(result string) tAncestorIndex {
 		repos = append(repos, tRepo{k, v})
 	}
 
+	sort.Sort(tRepoSort(repos))
+
 	info := ""
 	r := strings.Split(result, "\n")
 	if r[0] == "0" {
@@ -197,6 +202,18 @@ func dataAncestorResult(result string) tAncestorIndex {
 	}
 
 	return tAncestorIndex{repos, info}
+}
+
+func (s tRepoSort) Len() int {
+	return len(s)
+}
+
+func (s tRepoSort) Less(i, j int) bool {
+	return s[i].Alias < s[j].Alias
+}
+
+func (s tRepoSort) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
 }
 
 func ancestorServe(w http.ResponseWriter, req *http.Request) {
