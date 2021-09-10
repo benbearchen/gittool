@@ -34,7 +34,7 @@ cat $flocal $fremote | awk 'BEGIN{
     if ($1 == "remote") {
         h = a[$3];
         if (length(h) == 0 || index($2, h) != 1) {
-            if (0 == system("git log -1 --oneline "$2" > /dev/null 2>&1")) {
+            if (0 != system("git log -1 --oneline "$2" > /dev/null 2>&1")) {
                 b[$3] = $2;
                 c++;
             } else {
@@ -47,8 +47,6 @@ cat $flocal $fremote | awk 'BEGIN{
         printf("\n%d new branches, fetch...\n", c);
     } else if (c == 1) {
         printf("\none new branch, fetch...\n");
-    } else {
-        printf("\nall branches have been fetched\n");
     }
 
     for (n in b) {
@@ -61,6 +59,8 @@ cat $flocal $fremote | awk 'BEGIN{
         printf("\n%s branches updated, but hashes exist, try fetch:\n", length(e));
         system("git fetch '${ori}'");
     }
+
+    printf("\nall branches have been fetched\n");
 }'
 
 rm $flocal
