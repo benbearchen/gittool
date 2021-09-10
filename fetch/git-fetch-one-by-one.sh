@@ -24,7 +24,9 @@ fi
 git ls-remote $ori | grep "refs\/heads\/" | sed 's/refs\/heads\///g' | awk '{print "remote "$1" "$2}' > $fremote
 echo "[remote $ori] branch count: `cat $fremote | wc -l`"
 
-cat $flocal $fremote | awk '{
+cat $flocal $fremote | awk 'BEGIN{
+    split("", e);
+}{
     if ($1 == "local") {
         a[$3]=$2;
     }
@@ -32,9 +34,11 @@ cat $flocal $fremote | awk '{
     if ($1 == "remote") {
         h = a[$3];
         if (length(h) == 0 || index($2, h) != 1) {
-            if (0 == system("git log -1 --oneline "$2" > /dev/nul 2>&1")) {
+            if (0 == system("git log -1 --oneline "$2" > /dev/null 2>&1")) {
                 b[$3] = $2;
                 c++;
+            } else {
+                e[$3] = $2;
             }
         }
     }
@@ -51,6 +55,11 @@ cat $flocal $fremote | awk '{
         cc++;
         printf("\n[%2d/%d] fetch %s %s\n", cc, c, b[n], n);
         system("git fetch '${ori}' "n);
+    }
+
+    if (length(e) > 0) {
+        printf("\n%s branches updated, but hashes exist, try fetch:\n", length(e));
+        system("git fetch '${ori}'");
     }
 }'
 
