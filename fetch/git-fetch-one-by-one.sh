@@ -6,6 +6,7 @@ if [ -z "$ori" ]; then
 fi
 
 flocal=git-slow-local-hash-long-so-dont-conflikct.txt
+ftag=git-slow-remote-tag-long-so-dont-conflikct.txt
 fremote=git-slow-remote-hash-long-so-dont-conflikct.txt
 
 if [ -e $flocal ]; then
@@ -16,6 +17,14 @@ fi
 git branch -av | grep "remotes\/${ori}\/" | sed "s/remotes\/${ori}\//local /g" | awk '{print $1" "$3" "$2}' > $flocal
 echo "[local] branch count: `cat $flocal | wc -l`"
 
+if [ -e $ftag ]; then
+    rm $ftag
+fi
+
+#echo "get [remote $ori] tag to $ftag"
+git ls-remote --tags --sort='v:refname' $ori | grep "refs\/tags\/" | sed 's/refs\/tags\///g' | awk '{print "tag "$1" "$2}' > $ftag
+echo "[remote $ori] tag count: `cat $ftag | wc -l`"
+
 if [ -e $fremote ]; then
     rm $fremote
 fi
@@ -24,11 +33,21 @@ fi
 git ls-remote $ori | grep "refs\/heads\/" | sed 's/refs\/heads\///g' | awk '{print "remote "$1" "$2}' > $fremote
 echo "[remote $ori] branch count: `cat $fremote | wc -l`"
 
-cat $flocal $fremote | awk 'BEGIN{
+cat $flocal $ftag $fremote | awk 'BEGIN{
+    split("", b);
     split("", e);
+    split("", t);
 }{
     if ($1 == "local") {
         a[$3]=$2;
+    }
+
+    if ($1 == "tag") {
+        if (index($3, "^{}") == 0) {
+            if (0 != system("git log -1 --oneline "$3" > /dev/null 2>&1")) {
+                t[$3] = $2;
+            }
+        }
     }
 
     if ($1 == "remote") {
@@ -43,6 +62,15 @@ cat $flocal $fremote | awk 'BEGIN{
         }
     }
 }END{
+    if (length(t) > 0) {
+        printf("\n%d new tag, fetch...\n", length(t));
+        for (n in t) {
+            tt++;
+            printf("\n[%d/%d] fetch tag %s\n", tt, length(t), n);
+            system("git fetch '${ori}' "n);
+        }
+    }
+
     if (c > 1) {
         printf("\n%d new branches, fetch...\n", c);
     } else if (c == 1) {
@@ -51,7 +79,7 @@ cat $flocal $fremote | awk 'BEGIN{
 
     for (n in b) {
         cc++;
-        printf("\n[%2d/%d] fetch %s %s\n", cc, c, b[n], n);
+        printf("\n[%d/%d] fetch %s %s\n", cc, c, b[n], n);
         system("git fetch '${ori}' "n);
     }
 
@@ -60,10 +88,11 @@ cat $flocal $fremote | awk 'BEGIN{
         system("git fetch '${ori}'");
     }
 
-    printf("\nall branches have been fetched\n");
+    printf("\nall branches and tags have been fetched\n");
 }'
 
 rm $flocal
+rm $ftag
 rm $fremote
 
 exit;
