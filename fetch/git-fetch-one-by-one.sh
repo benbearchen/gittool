@@ -15,7 +15,9 @@ fi
 
 #echo "read [local] branch to $flocal"
 git branch -av | grep "remotes\/${ori}\/" | sed "s/remotes\/${ori}\//local /g" | awk '{print $1" "$3" "$2}' > $flocal
-echo "[local] branch count: `cat $flocal | wc -l`"
+#echo "read [local] tag to $flocal"
+git tag --list --format="local %(objectname) %(refname:short)" >> $flocal
+echo "[local] branch&tag count: `cat $flocal | wc -l`"
 
 if [ -e $ftag ]; then
     rm $ftag
@@ -33,19 +35,36 @@ fi
 git ls-remote $ori | grep "refs\/heads\/" | sed 's/refs\/heads\///g' | awk '{print "remote "$1" "$2}' > $fremote
 echo "[remote $ori] branch count: `cat $fremote | wc -l`"
 
+echo
+
 cat $flocal $ftag $fremote | awk 'BEGIN{
     split("", b);
     split("", e);
     split("", t);
+    state = "";
 }{
+    if ($1 != stage) {
+        stage = $1;
+        if (stage == "local") {
+            printf("start counting local branch&tag...\n");
+        } else if (stage == "tag") {
+            printf("start matching remote tag...\n");
+        } else if (stage == "remote") {
+            printf("start matching remote branch...\n");
+        }
+    }
+
     if ($1 == "local") {
         a[$3]=$2;
     }
 
     if ($1 == "tag") {
         if (index($3, "^{}") == 0) {
-            if (0 != system("git log -1 --oneline "$3" > /dev/null 2>&1")) {
-                t[$3] = $2;
+            h = a[$3];
+            if (length(h) == 0 || index($2, h) != 1) {
+                if (0 != system("git log -1 --oneline "$3" > /dev/null 2>&1")) {
+                    t[$3] = $2;
+                }
             }
         }
     }
