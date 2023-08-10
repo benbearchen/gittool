@@ -41,6 +41,7 @@ cat $flocal $ftag $fremote | awk 'BEGIN{
     split("", b);
     split("", e);
     split("", t);
+    tc = 0;
     state = "";
 }{
     if ($1 != stage) {
@@ -63,7 +64,8 @@ cat $flocal $ftag $fremote | awk 'BEGIN{
             h = a[$3];
             if (length(h) == 0 || index($2, h) != 1) {
                 if (0 != system("git log -1 --oneline "$3" > /dev/null 2>&1")) {
-                    t[$3] = $2;
+                    tc++;
+                    t[tc] = $3;
                 }
             }
         }
@@ -83,10 +85,17 @@ cat $flocal $ftag $fremote | awk 'BEGIN{
 }END{
     if (length(t) > 0) {
         printf("\n%d new tag, fetch...\n", length(t));
-        for (n in t) {
+        for (i in t) {
             tt++;
-            printf("\n[%d/%d] fetch tag %s\n", tt, length(t), n);
-            system("git fetch '${ori}' "n);
+            printf("\n[%d/%d] fetch tag %s\n", tt, length(t), t[i]);
+            if (0 != system("git fetch '${ori}' "t[i])) {
+                printf("try depth=1 then unshallow\n")
+                if (0 == system("git fetch --depth=1 '${ori}' "t[i]) && 0 == system("git fetch --unshallow '${ori}' "t[i])) {
+                    continue;
+                }
+
+                exit;
+            }
         }
     }
 
@@ -99,7 +108,9 @@ cat $flocal $ftag $fremote | awk 'BEGIN{
     for (n in b) {
         cc++;
         printf("\n[%d/%d] fetch %s %s\n", cc, c, b[n], n);
-        system("git fetch '${ori}' "n);
+        if (0 != system("git fetch '${ori}' "n)) {
+            exit;
+        }
     }
 
     if (length(e) > 0) {
